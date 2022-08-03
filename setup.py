@@ -47,7 +47,6 @@ configuration = {
         "scikit-learn >= 0.20",
         "scipy >= 1.3.1",
         "numba >= 0.46, != 0.47",
-        "tbb",
     ],
     "extras_require": {
         "plot": [
