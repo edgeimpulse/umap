@@ -2,11 +2,11 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.datasets import fetch_mldata
+from sklearn.datasets import fetch_openml
 
 import umap
 
-mnist = fetch_mldata("MNIST original")
+mnist = fetch_openml("Fashion-MNIST", version=1)
 
 
 trans = umap.UMAP(
@@ -19,7 +19,12 @@ trans = umap.UMAP(
 ).fit(mnist.data)
 
 corners = np.array(
-    [[-5.1, 2.9], [-1.9, 6.4], [-5.4, -6.3], [8.3, 4.0],]  # 7  # 4  # 1  # 0
+    [
+        [-5.1, 2.9],
+        [-1.9, 6.4],
+        [-5.4, -6.3],
+        [8.3, 4.0],
+    ]  # 7  # 4  # 1  # 0
 )
 
 test_pts = np.array(

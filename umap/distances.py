@@ -21,7 +21,7 @@ def sign(a):
 
 @numba.njit(fastmath=True)
 def euclidean(x, y):
-    """Standard euclidean distance.
+    r"""Standard euclidean distance.
 
     ..math::
         D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
@@ -34,7 +34,7 @@ def euclidean(x, y):
 
 @numba.njit(fastmath=True)
 def euclidean_grad(x, y):
-    """Standard euclidean distance and its gradient.
+    r"""Standard euclidean distance and its gradient.
 
     ..math::
         D(x, y) = \sqrt{\sum_i (x_i - y_i)^2}
@@ -50,7 +50,7 @@ def euclidean_grad(x, y):
 
 @numba.njit()
 def standardised_euclidean(x, y, sigma=_mock_ones):
-    """Euclidean distance standardised against a vector of standard
+    r"""Euclidean distance standardised against a vector of standard
     deviations per coordinate.
 
     ..math::
@@ -65,7 +65,7 @@ def standardised_euclidean(x, y, sigma=_mock_ones):
 
 @numba.njit(fastmath=True)
 def standardised_euclidean_grad(x, y, sigma=_mock_ones):
-    """Euclidean distance standardised against a vector of standard
+    r"""Euclidean distance standardised against a vector of standard
     deviations per coordinate with gradient.
 
     ..math::
@@ -81,7 +81,7 @@ def standardised_euclidean_grad(x, y, sigma=_mock_ones):
 
 @numba.njit()
 def manhattan(x, y):
-    """Manhattan, taxicab, or l1 distance.
+    r"""Manhattan, taxicab, or l1 distance.
 
     ..math::
         D(x, y) = \sum_i |x_i - y_i|
@@ -95,7 +95,7 @@ def manhattan(x, y):
 
 @numba.njit()
 def manhattan_grad(x, y):
-    """Manhattan, taxicab, or l1 distance with gradient.
+    r"""Manhattan, taxicab, or l1 distance with gradient.
 
     ..math::
         D(x, y) = \sum_i |x_i - y_i|
@@ -110,7 +110,7 @@ def manhattan_grad(x, y):
 
 @numba.njit()
 def chebyshev(x, y):
-    """Chebyshev or l-infinity distance.
+    r"""Chebyshev or l-infinity distance.
 
     ..math::
         D(x, y) = \max_i |x_i - y_i|
@@ -124,7 +124,7 @@ def chebyshev(x, y):
 
 @numba.njit()
 def chebyshev_grad(x, y):
-    """Chebyshev or l-infinity distance with gradient.
+    r"""Chebyshev or l-infinity distance with gradient.
 
     ..math::
         D(x, y) = \max_i |x_i - y_i|
@@ -144,7 +144,7 @@ def chebyshev_grad(x, y):
 
 @numba.njit()
 def minkowski(x, y, p=2):
-    """Minkowski distance.
+    r"""Minkowski distance.
 
     ..math::
         D(x, y) = \left(\sum_i |x_i - y_i|^p\right)^{\frac{1}{p}}
@@ -163,7 +163,7 @@ def minkowski(x, y, p=2):
 
 @numba.njit()
 def minkowski_grad(x, y, p=2):
-    """Minkowski distance with gradient.
+    r"""Minkowski distance with gradient.
 
     ..math::
         D(x, y) = \left(\sum_i |x_i - y_i|^p\right)^{\frac{1}{p}}
@@ -190,7 +190,7 @@ def minkowski_grad(x, y, p=2):
 
 @numba.njit()
 def poincare(u, v):
-    """Poincare distance.
+    r"""Poincare distance.
 
     ..math::
         \delta (u, v) = 2 \frac{ \lVert  u - v \rVert ^2 }{ ( 1 - \lVert  u \rVert ^2 ) ( 1 - \lVert  v \rVert ^2 ) }
@@ -227,7 +227,7 @@ def hyperboloid_grad(x, y):
 
 @numba.njit()
 def weighted_minkowski(x, y, w=_mock_ones, p=2):
-    """A weighted version of Minkowski distance.
+    r"""A weighted version of Minkowski distance.
 
     ..math::
         D(x, y) = \left(\sum_i w_i |x_i - y_i|^p\right)^{\frac{1}{p}}
@@ -238,14 +238,14 @@ def weighted_minkowski(x, y, w=_mock_ones, p=2):
     """
     result = 0.0
     for i in range(x.shape[0]):
-        result += (w[i] * np.abs(x[i] - y[i])) ** p
+        result += w[i] * np.abs(x[i] - y[i]) ** p
 
     return result ** (1.0 / p)
 
 
 @numba.njit()
 def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
-    """A weighted version of Minkowski distance with gradient.
+    r"""A weighted version of Minkowski distance with gradient.
 
     ..math::
         D(x, y) = \left(\sum_i w_i |x_i - y_i|^p\right)^{\frac{1}{p}}
@@ -256,12 +256,12 @@ def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
     """
     result = 0.0
     for i in range(x.shape[0]):
-        result += (w[i] * np.abs(x[i] - y[i])) ** p
+        result += w[i] * (np.abs(x[i] - y[i])) ** p
 
     grad = np.empty(x.shape[0], dtype=np.float32)
     for i in range(x.shape[0]):
         grad[i] = (
-            w[i] ** p
+            w[i]
             * pow(np.abs(x[i] - y[i]), (p - 1.0))
             * sign(x[i] - y[i])
             * pow(result, (1.0 / (p - 1)))
@@ -274,7 +274,7 @@ def weighted_minkowski_grad(x, y, w=_mock_ones, p=2):
 def mahalanobis(x, y, vinv=_mock_identity):
     result = 0.0
 
-    diff = np.empty(x.shape[0], dtype=np.float64)
+    diff = np.empty(x.shape[0], dtype=np.float32)
 
     for i in range(x.shape[0]):
         diff[i] = x[i] - y[i]
@@ -292,7 +292,7 @@ def mahalanobis(x, y, vinv=_mock_identity):
 def mahalanobis_grad(x, y, vinv=_mock_identity):
     result = 0.0
 
-    diff = np.empty(x.shape[0], dtype=np.float64)
+    diff = np.empty(x.shape[0], dtype=np.float32)
 
     for i in range(x.shape[0]):
         diff[i] = x[i] - y[i]
@@ -519,15 +519,25 @@ def haversine_grad(x, y):
 
     d = 2.0 * np.arcsin(np.sqrt(min(max(abs(a_1), 0), 1)))
     denom = np.sqrt(abs(a_1 - 1)) * np.sqrt(abs(a_1))
-    grad = np.array(
-        [
-            (
-                sin_lat * cos_lat
-                - np.sin(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long ** 2
-            ),
-            (np.cos(x[0] + np.pi / 2) * np.cos(y[0] + np.pi / 2) * sin_long * cos_long),
-        ]
-    ) / (denom + 1e-6)
+    grad = (
+        np.array(
+            [
+                (
+                    sin_lat * cos_lat
+                    - np.sin(x[0] + np.pi / 2)
+                    * np.cos(y[0] + np.pi / 2)
+                    * sin_long ** 2
+                ),
+                (
+                    np.cos(x[0] + np.pi / 2)
+                    * np.cos(y[0] + np.pi / 2)
+                    * sin_long
+                    * cos_long
+                ),
+            ]
+        )
+        / (denom + 1e-6)
+    )
     return d, grad
 
 
@@ -714,11 +724,11 @@ def log_single_beta(x):
 
 @numba.njit()
 def ll_dirichlet(data1, data2):
-    """ The symmetric relative log likelihood of rolling data2 vs data1
+    """The symmetric relative log likelihood of rolling data2 vs data1
     in n trials on a die that rolled data1 in sum(data1) trials.
-    
+
     ..math::
-        D(data1, data2) = DirichletMultinomail(data2 | data1)  
+        D(data1, data2) = DirichletMultinomail(data2 | data1)
     """
 
     n1 = np.sum(data1)
@@ -748,8 +758,8 @@ def ll_dirichlet(data1, data2):
 
 
 @numba.njit(fastmath=True)
-def symmetric_kl(x, y, z=1e-11):
-    """
+def symmetric_kl(x, y, z=1e-11):  # pragma: no cover
+    r"""
     symmetrized KL divergence between two probability distributions
 
     ..math::
@@ -779,7 +789,7 @@ def symmetric_kl(x, y, z=1e-11):
 
 
 @numba.njit(fastmath=True)
-def symmetric_kl_grad(x, y, z=1e-11):
+def symmetric_kl_grad(x, y, z=1e-11):  # pragma: no cover
     """
     symmetrized KL divergence and its gradient
 
@@ -846,7 +856,9 @@ def correlation_grad(x, y):
 
 
 @numba.njit(fastmath=True)
-def sinkhorn_distance(x, y, M=_mock_identity, cost=_mock_cost, maxiter=64):
+def sinkhorn_distance(
+    x, y, M=_mock_identity, cost=_mock_cost, maxiter=64
+):  # pragma: no cover
     p = (x / x.sum()).astype(np.float32)
     q = (y / y.sum()).astype(np.float32)
 
@@ -870,7 +882,7 @@ def sinkhorn_distance(x, y, M=_mock_identity, cost=_mock_cost, maxiter=64):
 
 
 @numba.njit(fastmath=True)
-def spherical_gaussian_energy_grad(x, y):
+def spherical_gaussian_energy_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -888,7 +900,7 @@ def spherical_gaussian_energy_grad(x, y):
 
 
 @numba.njit(fastmath=True)
-def diagonal_gaussian_energy_grad(x, y):
+def diagonal_gaussian_energy_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -923,7 +935,7 @@ def diagonal_gaussian_energy_grad(x, y):
 
 
 @numba.njit(fastmath=True)
-def gaussian_energy_grad(x, y):
+def gaussian_energy_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -996,7 +1008,7 @@ def gaussian_energy_grad(x, y):
 
 
 @numba.njit(fastmath=True)
-def spherical_gaussian_grad(x, y):
+def spherical_gaussian_grad(x, y):  # pragma: no cover
     mu_1 = x[0] - y[0]
     mu_2 = x[1] - y[1]
 
@@ -1243,6 +1255,31 @@ def parallel_special_metric(X, Y=None, metric=hellinger):
             for j in range(Y.shape[0]):
                 result[i, j] = metric(X[i], Y[j])
 
+    return result
+
+
+# We can gain efficiency by chunking the matrix into blocks;
+# this keeps data vectors in cache better
+@numba.njit(parallel=True, nogil=True)
+def chunked_parallel_special_metric(X, Y=None, metric=hellinger, chunk_size=16):
+    if Y is None:
+        XX, symmetrical = X, True
+        row_size = col_size = X.shape[0]
+    else:
+        XX, symmetrical = Y, False
+        row_size, col_size = X.shape[0], Y.shape[0]
+
+    result = np.zeros((row_size, col_size), dtype=np.float32)
+    n_row_chunks = (row_size // chunk_size) + 1
+    for chunk_idx in numba.prange(n_row_chunks):
+        n = chunk_idx * chunk_size
+        chunk_end_n = min(n + chunk_size, row_size)
+        m_start = n if symmetrical else 0
+        for m in range(m_start, col_size, chunk_size):
+            chunk_end_m = min(m + chunk_size, col_size)
+            for i in range(n, chunk_end_n):
+                for j in range(m, chunk_end_m):
+                    result[i, j] = metric(X[i], XX[j])
     return result
 
 

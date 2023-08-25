@@ -25,11 +25,11 @@ except ImportError:
 
     or via conda using
 
-     conda install pandas matplotlib datashader bokeh holoviews colorcet
+     conda install pandas matplotlib datashader bokeh holoviews colorcet scikit-image
     """
     )
     raise ImportError(
-        "umap.plot requires pandas matplotlib datashader bokeh holoviews and colorcet to be "
+        "umap.plot requires pandas matplotlib datashader bokeh holoviews scikit-image and colorcet to be "
         "installed"
     ) from None
 
@@ -39,10 +39,10 @@ import sklearn.neighbors
 
 from matplotlib.patches import Patch
 
-from umap.nndescent import initialise_search, initialized_nnd_search
-from umap.utils import deheap_sort, submatrix
+from umap.utils import submatrix, average_nn_distance
 
 from bokeh.plotting import show as show_interactive
+from bokeh.plotting import output_file, output_notebook
 from bokeh.layouts import column
 from bokeh.models import CustomJS, TextInput
 from matplotlib.pyplot import show as show_static
@@ -149,6 +149,31 @@ _themes = {
 _diagnostic_types = np.array(["pca", "ica", "vq", "local_dim", "neighborhood"])
 
 
+def _get_embedding(umap_object):
+    if hasattr(umap_object, "embedding_"):
+        return umap_object.embedding_
+    elif hasattr(umap_object, "embedding"):
+        return umap_object.embedding
+    else:
+        raise ValueError("Could not find embedding attribute of umap_object")
+
+
+def _get_metric(umap_object):
+    if hasattr(umap_object, "metric"):
+        return umap_object.metric
+    else:
+        # Assume euclidean if no attribute per cuML.UMAP
+        return "euclidean"
+
+
+def _get_metric_kwds(umap_object):
+    if hasattr(umap_object, "_metric_kwds"):
+        return umap_object._metric_kwds
+    else:
+        # Assume no keywords exist
+        return {}
+
+
 def _embed_datashader_in_an_axis(datashader_image, ax):
     img_rev = datashader_image.data[::-1]
     mpl_img = np.dstack([_blue(img_rev), _green(img_rev), _red(img_rev)])
@@ -157,7 +182,7 @@ def _embed_datashader_in_an_axis(datashader_image, ax):
 
 
 def _nhood_search(umap_object, nhood_size):
-    if umap_object._small_data:
+    if hasattr(umap_object, "_small_data") and umap_object._small_data:
         dmat = sklearn.metrics.pairwise_distances(umap_object._raw_data)
         indices = np.argpartition(dmat, nhood_size)[:, :nhood_size]
         dmat_shortened = submatrix(dmat, indices, nhood_size)
@@ -167,38 +192,10 @@ def _nhood_search(umap_object, nhood_size):
     else:
         rng_state = np.empty(3, dtype=np.int64)
 
-        if len(umap_object._metric_kwds) >= 1:
-            _dist = umap_object._input_distance_func
-            _args = tuple(umap_object._metric_kwds.values())
-
-            @numba.njit()
-            def _metric(x, y):
-                _dist(x, y, *_args)
-
-        else:
-            _metric = umap_object._input_distance_func
-
-        init = initialise_search(
-            umap_object._rp_forest,
+        indices, dists = umap_object._knn_search_index.query(
             umap_object._raw_data,
-            umap_object._raw_data,
-            int(nhood_size * umap_object.transform_queue_size),
-            rng_state,
-            _metric,
+            k=nhood_size,
         )
-
-        result = initialized_nnd_search(
-            umap_object._raw_data,
-            umap_object._search_graph.indptr,
-            umap_object._search_graph.indices,
-            init,
-            umap_object._raw_data,
-            _metric,
-        )
-
-        indices, dists = deheap_sort(result)
-        indices = indices[:, :nhood_size]
-        dists = dists[:, :nhood_size]
 
     return indices, dists
 
@@ -218,10 +215,10 @@ def _nhood_compare(indices_left, indices_right):
 
 def _get_extent(points):
     """Compute bounds on a space with appropriate padding"""
-    min_x = np.min(points[:, 0])
-    max_x = np.max(points[:, 0])
-    min_y = np.min(points[:, 1])
-    max_y = np.max(points[:, 1])
+    min_x = np.nanmin(points[:, 0])
+    max_x = np.nanmax(points[:, 0])
+    min_y = np.nanmin(points[:, 1])
+    max_y = np.nanmax(points[:, 1])
 
     extent = (
         np.round(min_x - 0.05 * (max_x - min_x)),
@@ -263,6 +260,7 @@ def _datashade_points(
     width=800,
     height=800,
     show_legend=True,
+    alpha=255,
 ):
 
     """Use datashader to plot points"""
@@ -290,7 +288,7 @@ def _datashade_points(
         data["label"] = pd.Categorical(labels)
         aggregation = canvas.points(data, "x", "y", agg=ds.count_cat("label"))
         if color_key is None and color_key_cmap is None:
-            result = tf.shade(aggregation, how="eq_hist")
+            result = tf.shade(aggregation, how="eq_hist", alpha=alpha)
         elif color_key is None:
             unique_labels = np.unique(labels)
             num_labels = unique_labels.shape[0]
@@ -301,12 +299,16 @@ def _datashade_points(
                 Patch(facecolor=color_key[i], label=k)
                 for i, k in enumerate(unique_labels)
             ]
-            result = tf.shade(aggregation, color_key=color_key, how="eq_hist")
+            result = tf.shade(
+                aggregation, color_key=color_key, how="eq_hist", alpha=alpha
+            )
         else:
             legend_elements = [
                 Patch(facecolor=color_key[k], label=k) for k in color_key.keys()
             ]
-            result = tf.shade(aggregation, color_key=color_key, how="eq_hist")
+            result = tf.shade(
+                aggregation, color_key=color_key, how="eq_hist", alpha=alpha
+            )
 
     # Color by values
     elif values is not None:
@@ -326,7 +328,9 @@ def _datashade_points(
             )
             aggregation = canvas.points(data, "x", "y", agg=ds.count_cat("val_cat"))
             color_key = _to_hex(plt.get_cmap(cmap)(np.linspace(0, 1, 256)))
-            result = tf.shade(aggregation, color_key=color_key, how="eq_hist")
+            result = tf.shade(
+                aggregation, color_key=color_key, how="eq_hist", alpha=alpha
+            )
         else:
             data["val_cat"] = pd.Categorical(values)
             aggregation = canvas.points(data, "x", "y", agg=ds.count_cat("val_cat"))
@@ -334,12 +338,14 @@ def _datashade_points(
                 plt.get_cmap(cmap)(np.linspace(0, 1, unique_values.shape[0]))
             )
             color_key = dict(zip(unique_values, color_key_cols))
-            result = tf.shade(aggregation, color_key=color_key, how="eq_hist")
+            result = tf.shade(
+                aggregation, color_key=color_key, how="eq_hist", alpha=alpha
+            )
 
     # Color by density (default datashader option)
     else:
         aggregation = canvas.points(data, "x", "y", agg=ds.count())
-        result = tf.shade(aggregation, cmap=plt.get_cmap(cmap))
+        result = tf.shade(aggregation, cmap=plt.get_cmap(cmap), alpha=alpha)
 
     if background is not None:
         result = tf.set_background(result, background)
@@ -365,6 +371,7 @@ def _matplotlib_points(
     width=800,
     height=800,
     show_legend=True,
+    alpha=None,
 ):
     """Use matplotlib to plot points"""
     point_size = 100.0 / np.sqrt(points.shape[0])
@@ -409,14 +416,17 @@ def _matplotlib_points(
                     "Color key must have enough colors for the number of labels"
                 )
 
-            new_color_key = {k: color_key[i] for i, k in enumerate(unique_labels)}
+            new_color_key = {
+                k: matplotlib.colors.to_hex(color_key[i])
+                for i, k in enumerate(unique_labels)
+            }
             legend_elements = [
                 Patch(facecolor=color_key[i], label=k)
                 for i, k in enumerate(unique_labels)
             ]
             colors = pd.Series(labels).map(new_color_key)
 
-        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=colors)
+        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=colors, alpha=alpha)
 
     # Color by values
     elif values is not None:
@@ -427,7 +437,9 @@ def _matplotlib_points(
                     values.shape[0], points.shape[0]
                 )
             )
-        ax.scatter(points[:, 0], points[:, 1], s=point_size, c=values, cmap=cmap)
+        ax.scatter(
+            points[:, 0], points[:, 1], s=point_size, c=values, cmap=cmap, alpha=alpha
+        )
 
     # No color (just pick the midpoint of the cmap)
     else:
@@ -457,6 +469,8 @@ def show(plot_to_show):
         show_static()
     elif isinstance(plot_to_show, bpl.Figure):
         show_interactive(plot_to_show)
+    elif isinstance(plot_to_show, hv.core.spaces.DynamicMap):
+        show_interactive(hv.render(plot_to_show), backend="bokeh")
     else:
         raise ValueError(
             "The type of ``plot_to_show`` was not valid, or not understood."
@@ -476,6 +490,8 @@ def points(
     height=800,
     show_legend=True,
     subset_points=None,
+    ax=None,
+    alpha=None,
 ):
     """Plot an embedding as points. Currently this only works
     for 2D embeddings. While there are many optional parameters
@@ -575,17 +591,24 @@ def points(
         A way to select a subset of points based on an array of boolean
         values.
 
+    ax: matplotlib axis (optional, default None)
+        The matplotlib axis to draw the plot to, or if None, which is
+        the default, a new axis will be created and returned.
+
+    alpha: float (optional, default: None)
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
     Returns
     -------
     result: matplotlib axis
         The result is a matplotlib axis with the relevant plot displayed.
-        If you are using a notbooks and have ``%matplotlib inline`` set
+        If you are using a notebooks and have ``%matplotlib inline`` set
         then this will simply display inline.
     """
-    if not hasattr(umap_object, "embedding_"):
-        raise ValueError(
-            "UMAP object must perform fit on data before it can be visualized"
-        )
+    # if not hasattr(umap_object, "embedding_"):
+    #     raise ValueError(
+    #         "UMAP object must perform fit on data before it can be visualized"
+    #     )
 
     if theme is not None:
         cmap = _themes[theme]["cmap"]
@@ -597,7 +620,11 @@ def points(
             "Conflicting options; only one of labels or values should be set"
         )
 
-    points = umap_object.embedding_
+    if alpha is not None:
+        if not 0.0 <= alpha <= 1.0:
+            raise ValueError("Alpha must be between 0 and 1 inclusive")
+
+    points = _get_embedding(umap_object)
 
     if subset_points is not None:
         if len(subset_points) != points.shape[0]:
@@ -618,9 +645,10 @@ def points(
 
     font_color = _select_font_color(background)
 
-    dpi = plt.rcParams["figure.dpi"]
-    fig = plt.figure(figsize=(width / dpi, height / dpi))
-    ax = fig.add_subplot(111)
+    if ax is None:
+        dpi = plt.rcParams["figure.dpi"]
+        fig = plt.figure(figsize=(width / dpi, height / dpi))
+        ax = fig.add_subplot(111)
 
     if points.shape[0] <= width * height // 10:
         ax = _matplotlib_points(
@@ -635,8 +663,15 @@ def points(
             width,
             height,
             show_legend,
+            alpha,
         )
     else:
+        # Datashader uses 0-255 as the range for alpha, with 255 as the default
+        if alpha is not None:
+            alpha = alpha * 255
+        else:
+            alpha = 255
+
         ax = _datashade_points(
             points,
             ax,
@@ -649,15 +684,16 @@ def points(
             width,
             height,
             show_legend,
+            alpha,
         )
 
     ax.set(xticks=[], yticks=[])
-    if umap_object.metric != "euclidean":
+    if _get_metric(umap_object) != "euclidean":
         ax.text(
             0.99,
             0.01,
             "UMAP: metric={}, n_neighbors={}, min_dist={}".format(
-                umap_object.metric, umap_object.n_neighbors, umap_object.min_dist
+                _get_metric(umap_object), umap_object.n_neighbors, umap_object.min_dist
             ),
             transform=ax.transAxes,
             horizontalalignment="right",
@@ -813,7 +849,7 @@ def connectivity(
         edge_cmap = _themes[theme]["edge_cmap"]
         background = _themes[theme]["background"]
 
-    points = umap_object.embedding_
+    points = _get_embedding(umap_object)
     point_df = pd.DataFrame(points, columns=("x", "y"))
 
     point_size = 100.0 / np.sqrt(points.shape[0])
@@ -987,7 +1023,7 @@ def diagnostic(
         then this will simply display inline.
     """
 
-    points = umap_object.embedding_
+    points = _get_embedding(umap_object)
 
     if points.shape[1] != 2:
         raise ValueError("Plotting is currently only implemented for 2D embeddings")
@@ -1188,6 +1224,7 @@ def interactive(
     interactive_text_search=False,
     interactive_text_search_columns=None,
     interactive_text_search_alpha_contrast=0.95,
+    alpha=None,
 ):
     """Create an interactive bokeh plot of a UMAP embedding.
     While static plots are useful, sometimes a plot that
@@ -1304,6 +1341,9 @@ def interactive(
         Alpha value for points matching text search. Alpha value for points
         not matching text search will be 1 - interactive_text_search_alpha_contrast
 
+    alpha: float (optional, default: None)
+        The alpha blending value, between 0 (transparent) and 1 (opaque).
+
     Returns
     -------
 
@@ -1318,7 +1358,11 @@ def interactive(
             "Conflicting options; only one of labels or values should be set"
         )
 
-    points = umap_object.embedding_
+    if alpha is not None:
+        if not 0.0 <= alpha <= 1.0:
+            raise ValueError("Alpha must be between 0 and 1 inclusive")
+
+    points = _get_embedding(umap_object)
     if subset_points is not None:
         if len(subset_points) != points.shape[0]:
             raise ValueError(
@@ -1334,7 +1378,7 @@ def interactive(
     if point_size is None:
         point_size = 100.0 / np.sqrt(points.shape[0])
 
-    data = pd.DataFrame(umap_object.embedding_, columns=("x", "y"))
+    data = pd.DataFrame(_get_embedding(umap_object), columns=("x", "y"))
 
     if labels is not None:
         data["label"] = labels
@@ -1381,12 +1425,15 @@ def interactive(
             tooltip_dict = {}
             for col_name in hover_data:
                 data[col_name] = hover_data[col_name]
-                tooltip_dict[col_name] = "@" + col_name
+                tooltip_dict[col_name] = "@{" + col_name + "}"
             tooltips = list(tooltip_dict.items())
         else:
             tooltips = None
 
-        data["alpha"] = 1
+        if alpha is not None:
+            data["alpha"] = alpha
+        else:
+            data["alpha"] = 1
 
         # bpl.output_notebook(hide_banner=True) # this doesn't work for non-notebook use
         data_source = bpl.ColumnDataSource(data)
@@ -1477,9 +1524,12 @@ def interactive(
             warn(
                 "Too many points for text search." "Sorry; try subssampling your data."
             )
+        if alpha is not None:
+            warn("Alpha parameter will not be applied on holoviews plots")
         hv.extension("bokeh")
         hv.output(size=300)
-        hv.opts('RGB [bgcolor="{}", xaxis=None, yaxis=None]'.format(background))
+        hv.opts.defaults(hv.opts.RGB(bgcolor=background, xaxis=None, yaxis=None))
+
         if labels is not None:
             point_plot = hv.Points(data, kdims=["x", "y"])
             plot = hd.datashade(
@@ -1515,3 +1565,37 @@ def interactive(
             )
 
     return plot
+
+
+def nearest_neighbour_distribution(umap_object, bins=25, ax=None):
+    """Create a histogram of the average distance to each points
+    nearest neighbors.
+
+    Parameters
+    ----------
+    umap_object: trained UMAP object
+        A trained UMAP object that has an embedding.
+
+    bins: int (optional, default 25)
+        Number of bins to put the points into
+
+    ax: matlotlib axis (optional, default None)
+        A matplotlib axis to plot to, or, if None, a new
+        axis will be created and returned.
+
+    Returns
+    -------
+
+    """
+    nn_distances = average_nn_distance(umap_object.graph_)
+
+    if ax is None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
+    ax.set_xlabel(f"Average distance to nearest neighbors")
+    ax.set_ylabel("Frequency")
+
+    ax.hist(nn_distances, bins=bins)
+
+    return ax

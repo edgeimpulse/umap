@@ -22,7 +22,7 @@ difficulties that can face clustering approaches and how UMAP can
 provide a powerful tool to help overcome them.
 
 First we'll need a selection of libraries loaded up. Obviously we'll
-need data, and we can use sklearn's ``fetch_mldata`` to get it. We'll
+need data, and we can use sklearn's ``fetch_openml`` to get it. We'll
 also need the usual tools of numpy, and plotting. Next we'll need umap,
 and some clustering options. Finally, since we'll be working with
 labeled data, we can make use of strong cluster evaluation metrics
@@ -33,11 +33,10 @@ Information <https://en.wikipedia.org/wiki/Adjusted_mutual_information>`__.
 
 .. code:: python3
 
-    from sklearn.datasets import fetch_mldata
+    from sklearn.datasets import fetch_openml
     from sklearn.decomposition import PCA
     import numpy as np
     import matplotlib.pyplot as plt
-    import seaborn as sns
     %matplotlib inline
     
     # Dimension reduction and clustering libraries
@@ -55,11 +54,8 @@ the clustering to recover the digit structure.
 
 .. code:: python3
 
-    sns.set(style='white', rc={'figure.figsize':(10,8)})
-
-.. code:: python3
-
-    mnist = fetch_mldata('MNIST Original')
+    mnist = fetch_openml('mnist_784', version=1)
+    mnist.target = mnist.target.astype(int)
 
 For visualization purposes we can reduce the data to 2-dimensions using
 UMAP. When we cluster the data in high dimensions we can visualize the
@@ -70,7 +66,7 @@ color for each digit. This will help frame what follows.
 .. code:: python3
 
     standard_embedding = umap.UMAP(random_state=42).fit_transform(mnist.data)
-    plt.scatter(standard_embedding[:, 0], standard_embedding[:, 1], c=mnist.target, s=0.1, cmap='Spectral');
+    plt.scatter(standard_embedding[:, 0], standard_embedding[:, 1], c=mnist.target.astype(int), s=0.1, cmap='Spectral');
 
 .. image:: images/clustering_6_1.png
 
@@ -103,8 +99,8 @@ out UMAP embedded data by cluster membership.
 This is not really the result we were looking for (though it does expose
 interesting properties of how K-Means chooses clusters in high
 dimensional space, and how UMAP unwraps manifolds by finding manifold
-boundaries). While K-Means gets some cases correct -- the two clusters
-are the far right are mostly correct, most of the rest of the data looks
+boundaries). While K-Means gets some cases correct, such as the two clusters
+on the right side which are mostly correct, most of the rest of the data looks
 somewhat arbitrarily carved up among the remaining clusters. We can put
 this impression to the test by evaluating the adjusted Rand score and
 adjusted mutual information for this clustering as compared with the
@@ -148,7 +144,7 @@ poorly with the dimensionality of the data it will work on.
 
 We can now inspect the results. Before we do, however, it should be
 noted that one of the features of HDBSCAN is that it can refuse to
-cluster some points and classify the as "noise". To visualize this
+cluster some points and classify them as "noise". To visualize this
 aspect we will color points that were classified as noise gray, and then
 color the remaining points according to the cluster membership.
 
@@ -157,7 +153,7 @@ color the remaining points according to the cluster membership.
     clustered = (hdbscan_labels >= 0)
     plt.scatter(standard_embedding[~clustered, 0], 
                 standard_embedding[~clustered, 1], 
-                c=(0.5, 0.5, 0.5), 
+                color=(0.5, 0.5, 0.5), 
                 s=0.1,
                 alpha=0.5)
     plt.scatter(standard_embedding[clustered, 0], 
@@ -172,7 +168,7 @@ color the remaining points according to the cluster membership.
 
 
 This looks somewhat underwhelming. It meets HDBSCAN's approach of "not
-being wrong" by simply refusing the classify the majority of the data.
+being wrong" by simply refusing to classify the majority of the data.
 The result is a clustering that almost certainly fails to recover all
 the labels. We can verify this by looking at the clustering validation
 scores.
@@ -320,7 +316,7 @@ And now we can visualize the results, just as before.
     clustered = (labels >= 0)
     plt.scatter(standard_embedding[~clustered, 0], 
                 standard_embedding[~clustered, 1], 
-                c=(0.5, 0.5, 0.5), 
+                color=(0.5, 0.5, 0.5), 
                 s=0.1,
                 alpha=0.5)
     plt.scatter(standard_embedding[clustered, 0], 
@@ -355,7 +351,7 @@ quality measures as before.
 
 
 
-Where before HDBSCAN performed very poorly, we now have score of 0.9 or
+Where before HDBSCAN performed very poorly, we now have scores of 0.9 or
 better. This is because we actually clustered far more of the data. As
 before we can also look at how the clustering did on just the data that
 HDBSCAN was confident in clustering.
@@ -402,6 +398,6 @@ techniques. That's not bad for an approach that is simply viewing the
 data as arbitrary 784 dimensional vectors.
 
 Hopefully this has outlined how UMAP can be beneficial for clustering.
-As with all thing care must be taken, but clearly UMAP can provide
+As with all things care must be taken, but clearly UMAP can provide
 significantly better clustering results when used judiciously.
 

@@ -15,7 +15,7 @@ Should I normalise my features?
 
 The default answer is yes, but, of course, the real answer is
 "it depends". If your features have meaningful relationships
-with one another (say, latitude and longitude vales) then
+with one another (say, latitude and longitude values) then
 normalising per feature is not a good idea. For features that
 are essentially independent it does make sense to get all the
 features on (relatively) the same scale. The best way to do
@@ -23,7 +23,7 @@ this is to use
 `pre-processing tools from scikit-learn <http://scikit-learn.org/stable/modules/preprocessing.html>`_.
 All the advice given there applies as sensible preprocessing
 for UMAP, and since UMAP is scikit-learn compatible you
-can put all of this together into a `scikit-learn pipeline <http://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html>`_
+can put all of this together into a `scikit-learn pipeline <http://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html>`_.
 
 
 Can I cluster the results of UMAP?
@@ -73,7 +73,7 @@ bokeh is similarly useful (but does not need to be quite so small).
 
 More generally the real solution, particular with large datasets,
 is to use `datashader <http://datashader.org/>`_ for plotting.
-Datashader is a plotting llibrary that handles aggregation
+Datashader is a plotting library that handles aggregation
 of large scale data in scatter plots in a way that can better
 show the underlying detail that can otherwise be lost. We
 highly recommend investing the time to learn datashader for
@@ -113,7 +113,7 @@ be added.
 
 There is a UMAP implementation for GPU available in
 the NVIDIA RAPIDS cuML library, so if you need GPU
-support that is currently the best palce to go.
+support that is currently the best place to go.
 
 Can I add a custom loss function?
 ---------------------------------
@@ -122,7 +122,7 @@ To allow for fast performance the SGD phase of UMAP has
 been hand-coded for the specific needs of UMAP. This makes
 custom loss functions a little difficult to handle. Now
 that Numba (as of version 0.38) supports passing functions
-it is posisble that future versions of UMAP may support
+it is possible that future versions of UMAP may support
 such functionality. In the meantime you should definitely
 look into `smallvis <https://github.com/jlmelville/smallvis>`_,
 a library for t-SNE, LargeVis, UMAP, and related algorithms.
@@ -198,7 +198,7 @@ This is an example of an embedding for a popular Fashion MNIST dataset.
 
 Note that FMNIST is mostly a toy dataset (MNIST on steroids).
 On such a simplistic case UMAP shows distillation results
-(i.e. if we use its embedding in a downsteam task like classification)
+(i.e. if we use its embedding in a downstream task like classification)
 comparable to VAEs, which are more computationally expensive.
 
 By definition:
@@ -210,7 +210,7 @@ By definition:
 - VAE is a kind of encoder-decoder neural network,
   trained with KLD loss and BCE (or MSE) loss
   to enforce the resulting embedding to be continuous.
-  VAE is and extension of auto-encoder network,
+  VAE is an extension of auto-encoder networks,
   which by design should produce embeddings that are
   not only relevant to actually encoding the data, but are
   also smooth.
@@ -238,13 +238,52 @@ Which tool should I use?
 
 Where can I learn more?
 
-- While PCA is ubiqutous, you may `look <https://github.com/snakers4/playing_with_vae>`_
+- While PCA is ubiquitous, you may `look <https://github.com/snakers4/playing_with_vae>`_
   at this example comparing PCA / UMAP / VAEs;
+
+How UMAP can go wrong
+---------------------
+
+One way UMAP can go wrong is the introduction of data points that are maximally far apart
+from all other points in your data set.  In other words, a points nearest neighbour is maximally
+far from it.  A common example of this could be a point which shares no features in common
+with any other point under a Jaccard distance or a point whose nearest neighbour is np.inf from
+it under a continuous distance function.  In both these cases UMAPs assumption of all points
+lying on a connected manifold can lead us astray.  From this points perspective all other points
+are equally valid nearest neighbours so its k-nearest neighbour query will return a random
+selection of neighbours all at this maximal distance.  Next we will normalize this distance by
+applying our UMAP kernel which says that a point should be maximally similar to it's nearest neighbour.
+Since all k-nearest neighbours are identically far apart they will all be considered maximally
+similar by our point in question.  When we try to embed our data into a low dimensional space
+our optimization will attempt to pull all these randomly selected points together.  Add a
+sufficiently large number of these points and our entire space gets pulled together destroying
+any of the structure we had hoped to identify.
+
+To circumvent this problem we've added a disconnection_distance parameter to UMAP which will cut
+any edge with a distance greater than the value passed in.  This parameter defaults to ``None``.
+When set to ``None`` the disconnection_distance will be set to the maximal value for any of our
+supported bounded metrics and otherwise set to np.inf.  Removing these edges from the UMAP graph
+will disconnect our manifold and cause these points to start where they are initialized and get pushed
+away from all other points via the our optimization.
+
+If a user has a good understanding of their distance metric they can set this value by hand to prevent
+data in particularly sparse regions of their space from becoming connected to their manifold.
+
+If vertices in your graph are disconnected a warning message will be thrown.  At that point a user can
+make use of the umap.utils.disconnected_vertices() function to identify the disconnected points.
+This can be used either for filtering and retraining a new UMAP model or simple to bed used as a
+filter for visualization purposes as seen below.
+
+.. code:: python3
+
+    umap_model = umap.UMAP().fit(data)
+    disconnected_points = umap.utils.disconnected_vertices(umap_model)
+    umap.plot.points(umap_model, subset_points=~disconnected_points)
 
 Successful use-cases
 --------------------
 
-UMAP can be / has been Successfully applied to the following domains:
+UMAP can be / has been successfully applied to the following domains:
 
 - Single cell data visualization in biology;
 - Mapping malware based on behavioural data;
