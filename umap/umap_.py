@@ -48,6 +48,8 @@ from pynndescent import NNDescent
 from pynndescent.distances import named_distances as pynn_named_distances
 from pynndescent.sparse import sparse_named_distances as pynn_sparse_named_distances
 
+import importlib
+
 locale.setlocale(locale.LC_NUMERIC, "C")
 
 INT32_MIN = np.iinfo(np.int32).min + 1
@@ -1685,6 +1687,33 @@ class UMAP(BaseEstimator):
 
         self.a = a
         self.b = b
+
+    class EiFuncDescriptor:
+        def __init__(self, module, name):
+            self.module = module
+            self.name = name
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        # Replace numba funcs with just the names
+        # They create problems during unpickling if numba vesion changes
+        for key, value in state.items():
+            if type(value) == numba.core.registry.CPUDispatcher:
+                state[key] = UMAP.EiFuncDescriptor(value.__module__, value.__name__)
+
+        state['ei_version'] = 1
+        return state
+
+    def __setstate__(self, state):
+        for key, value in state.items():
+            if type(value) == UMAP.EiFuncDescriptor:
+                # Import the module
+                module = importlib.import_module(value.module)
+                # Get the function
+                func = getattr(module, value.name)
+                state[key] = func
+
+        self.__dict__.update(state)
 
     def _validate_parameters(self):
         if self.set_op_mix_ratio < 0.0 or self.set_op_mix_ratio > 1.0:
