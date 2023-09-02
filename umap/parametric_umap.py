@@ -16,8 +16,8 @@ except ImportError:
     warn(
         """The umap.parametric_umap package requires Tensorflow > 2.0 to be installed.
     You can install Tensorflow at https://www.tensorflow.org/install
-    
-    or you can install the CPU version of Tensorflow using 
+
+    or you can install the CPU version of Tensorflow using
 
     pip install umap-learn[parametric_umap]
 
@@ -30,8 +30,8 @@ if TF_MAJOR_VERSION < 2:
     warn(
         """The umap.parametric_umap package requires Tensorflow > 2.0 to be installed.
     You can install Tensorflow at https://www.tensorflow.org/install
-    
-    or you can install the CPU version of Tensorflow using 
+
+    or you can install the CPU version of Tensorflow using
 
     pip install umap-learn[parametric_umap]
 
@@ -43,16 +43,16 @@ try:
     import tensorflow_probability
 except ImportError:
     warn(
-        """ Global structure preservation in the umap.parametric_umap package requires 
+        """ Global structure preservation in the umap.parametric_umap package requires
         tensorflow_probability to be installed. You can install tensorflow_probability at
-        https://www.tensorflow.org/probability, 
-        
+        https://www.tensorflow.org/probability,
+
         or via
 
         pip install --upgrade tensorflow-probability
 
-        Please ensure to install a version which is compatible to your tensorflow 
-        installation. You can verify the correct release at 
+        Please ensure to install a version which is compatible to your tensorflow
+        installation. You can verify the correct release at
         https://github.com/tensorflow/probability/releases.
 
         """
@@ -461,7 +461,7 @@ class ParametricUMAP(UMAP):
         # create embedding
         history = self.parametric_model.fit(
             edge_dataset,
-            epochs=self.loss_report_frequency * self.n_training_epochs,
+            epochs=1, # self.loss_report_frequency * self.n_training_epochs,
             steps_per_epoch=steps_per_epoch,
             max_queue_size=100,
             validation_data=validation_data,
@@ -867,9 +867,9 @@ def prepare_networks(
                 [
                     tf.keras.layers.InputLayer(input_shape=dims),
                     tf.keras.layers.Flatten(),
-                    tf.keras.layers.Dense(units=100, activation="relu"),
-                    tf.keras.layers.Dense(units=100, activation="relu"),
-                    tf.keras.layers.Dense(units=100, activation="relu"),
+                    tf.keras.layers.Dense(units=10, activation="relu"),
+                    tf.keras.layers.Dense(units=10, activation="relu"),
+                    tf.keras.layers.Dense(units=10, activation="relu"),
                     tf.keras.layers.Dense(units=n_components, name="z"),
                 ]
             )
