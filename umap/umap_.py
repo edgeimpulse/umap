@@ -1693,6 +1693,10 @@ class UMAP(BaseEstimator):
             self.module = module
             self.name = name
 
+    class EiStub:
+        def __init__(self, shape):
+            self.shape = shape
+
     def __getstate__(self):
         state = self.__dict__.copy()
         # Replace numba funcs with just the names
@@ -1701,6 +1705,12 @@ class UMAP(BaseEstimator):
             if type(value) == numba.core.registry.CPUDispatcher:
                 state[key] = UMAP.EiFuncDescriptor(value.__module__, value.__name__)
 
+        # Remove the reference to raw data...we don't use it and it explodes the pickle size
+        # Replace it with a stub the keeps track of sample size
+        # Spoof the shape member of numpy
+        state['_raw_data'] = UMAP.EiStub(state['_raw_data'].shape)
+
+        # Set a version for future compatibility possibilites
         state['ei_version'] = 1
         return state
 
