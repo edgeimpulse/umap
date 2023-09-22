@@ -355,8 +355,8 @@ def nearest_neighbors(
         "rhos": numba.types.float32[::1],
         "val": numba.types.float32,
     },
-    parallel=True,
-    fastmath=True,
+    parallel=False,
+    fastmath=False,
 )
 def compute_membership_strengths(
     knn_indices,
@@ -1705,6 +1705,7 @@ class UMAP(BaseEstimator):
         return state
 
     def __setstate__(self, state):
+        # Replace any function names with real funcs
         for key, value in state.items():
             if type(value) == UMAP.EiFuncDescriptor:
                 # Import the module
